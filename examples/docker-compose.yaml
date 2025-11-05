@@ -1,10 +1,12 @@
 services:
   koha:
-    # Ми будемо "збирати" образ, а не "тягнути" готовий
-    build: 
+    build:
       context: ..
-      dockerfile: Dockerfile   
-    image: koha-local:24.11 # Даємо йому локальне ім'я
+      dockerfile: Dockerfile
+      args:
+        # Передаємо лише номер версії (напр., 25.05) у Dockerfile
+        KOHA_VERSION: ${KOHA_IMAGE_TAG}
+    image: ${KOHA_IMAGE_NAME}:${KOHA_IMAGE_TAG}
     ports:
       - 8080:8080 # OPAC
       - 8081:8081 # Staff
@@ -14,14 +16,12 @@ services:
       - DAC_READ_SEARCH
       - SYS_NICE
     environment:
-      # --- ВИПРАВЛЕНО ---
-      # Ми використовуємо імена за замовчуванням зі скрипта 02-setup-koha.sh
       MYSQL_SERVER: db
-      MYSQL_USER: koha_default
-      MYSQL_PASSWORD: koha_password # Ви можете змінити це
-      DB_NAME: koha_default
-      KOHA_INSTANCE: default # Це відповідає скрипту
-      # ---------------------
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      KOHA_INSTANCE: ${KOHA_INSTANCE}
+      KOHA_DOMAIN: ${KOHA_DOMAIN}
       MEMCACHED_SERVERS: memcached:11211
       MB_HOST: rabbitmq
     depends_on:
@@ -31,32 +31,31 @@ services:
          condition: service_started
       memcached:
          condition: service_started
-    restart: always # Додано для стабільності
+    restart: always
 
   rabbitmq:
-    image: docker.io/rabbitmq:3-management # <-- ЗМІНЕНО: (беремо з STOMP)
+    image: docker.io/rabbitmq:3-management
     environment:
-        - RABBITMQ_DEFAULT_PLUGINS=rabbitmq_stomp # <-- Вмикаємо STOMP тут
+        - RABBITMQ_DEFAULT_PLUGINS=rabbitmq_stomp
     networks:
         - koha
     restart: always
-      # Ми ВИДАЛИЛИ 'build:' та 'volumes:' - вони ламали права доступу
 
   db:
     image: docker.io/mariadb:11
     volumes:
       - mariadb-koha:/var/lib/mysql
     environment:
-      MARIADB_ROOT_PASSWORD: example
-      MARIADB_DATABASE: koha_default
-      MARIADB_USER: koha_default
-      MARIADB_PASSWORD: koha_password
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASS}
+      MARIADB_DATABASE: ${DB_NAME}
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASS}
     networks:
       - koha
     restart: always
     healthcheck:
-      # --- ВИПРАВЛЕНО: "жорстко" прописані логін/пароль ---
-      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -u koha_default -pkoha_password || exit 1"]
+      # Тепер healthcheck використовує змінні з .env!
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -u ${DB_USER} -p'${DB_PASS}' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -66,7 +65,7 @@ services:
     image: docker.io/memcached
     networks:
       - koha
-    restart: always # Додано для стабільності
+    restart: always
 
 volumes:
     mariadb-koha:
