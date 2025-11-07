@@ -27,7 +27,7 @@ services:
       ELASTICSEARCH_HOST: es:9200
       # --- ВИПРАВЛЕНО: Беремо з .env ---
       TZ: ${KOHA_TIMEZONE}
-      KOHA_TIMEZONE: ${KOHA_TIMEZONE}
+      KOHA_LANGS: ${KOHA_LANGS}
       # Налаштування RabbitMQ (Беремо з .env)
       MB_HOST: rabbitmq
       MB_PORT: 61613
