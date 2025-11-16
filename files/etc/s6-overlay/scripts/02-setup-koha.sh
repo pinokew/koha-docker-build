@@ -228,6 +228,36 @@ set -u
 #service apache2 stop || true
 #service apache2 start || true
 
+# --- Увімкнення Довірених Проксі (Reverse Proxy) ---
+if [ -f "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml" ]; then
+    echo "Updating trusted proxies..."
+    # Ця команда знаходить тег <koha_trusted_proxies> і замінює його вміст.
+    sed -i "s|<koha_trusted_proxies>.*</koha_trusted_proxies>|<koha_trusted_proxies>127.0.0.1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16</koha_trusted_proxies>|g" "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml"
+fi
+# --- КІНЕЦЬ БЛОКУ ---
+
+# --- АВТОМАТИЧНЕ УВІМКНЕННЯ ПЛАГІНІВ (Метод SED) ---
+if [ -f "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml" ]; then
+    echo "Enabling plugins (enable_plugins=1)..."
+    sed -i "s|<enable_plugins>.*</enable_plugins>|<enable_plugins>1</enable_plugins>|g" "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml"
+fi
+# --- КІНЕЦЬ БЛОКУ ---
+# --- Дозволяємо завантаження плагінів (plugins_restricted=0) ---
+# (Згідно з інструкцією, це дозволяє завантажувати .kpz файли)
+if [ -f "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml" ]; then
+    echo "Allowing plugin uploads (plugins_restricted=0)..."
+    sed -i "s|<plugins_restricted>.*</plugins_restricted>|<plugins_restricted>0</plugins_restricted>|g" "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml"
+fi
+
+# --- Увімкнення "Магазину плагінів" (Repo) ---
+# (Розкоментовує <repo>...</repo> всередині koha-conf.xml)
+if [ -f "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml" ]; then
+    echo "Enabling plugin repositories..."
+    # Видаляємо коментар ЯКИЙ ЙДЕ ПЕРЕД </plugin_repos>
+    sed -i "s|-->[[:space:]]*</plugin_repos>|</plugin_repos>|g" "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml"
+fi
+# --- КІНЕЦЬ БЛОКІВ ---
+
 echo "by mzhk"
 
 exit 0
