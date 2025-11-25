@@ -1,13 +1,26 @@
 #!/command/with-contenv bash
 set -u
 
-# --- ПАТЧ KOHA-CREATE: обхід вимоги mpm_itk в Docker (KDV) ---
+# --- ПАТЧ KOHA-CREATE: обхід вимог mpm_itk, mod_cgi та existing user в Docker (KDV) ---
 if [ -x /usr/sbin/koha-create ]; then
   if ! grep -q "mpm_itk check bypassed inside Docker (KDV setup)" /usr/sbin/koha-create; then
-    echo "Patching koha-create: bypass mpm_itk requirement for Docker..."
-    perl -0pi -e 's/(Koha requires mpm_itk to be enabled within Apache in order to run\.\n.*?EOM\s*\n\s*)die/\1echo "WARNING: mpm_itk check bypassed inside Docker (KDV setup), proceeding without it." 1>&2\n        #die/s' /usr/sbin/koha-create || echo "WARNING: koha-create mpm_itk patch failed, please check manually."
+    echo "Patching koha-create: bypass mpm_itk, mod_cgi & user-exists checks for Docker..."
+
+    # 1) Обхід перевірки mpm_itk
+    perl -0pi -e 's/(Koha requires mpm_itk to be enabled within Apache in order to run\.\n.*?EOM\s*\n\s*)die/\1echo "WARNING: mpm_itk check bypassed inside Docker (KDV setup), proceeding without it." 1>&2\n        #die/s' /usr/sbin/koha-create \
+      || echo "WARNING: koha-create mpm_itk patch failed, please check manually."
+
+    # 2) Обхід перевірки mod_cgi
+    perl -0pi -e 's/(Koha requires mod_cgi to be enabled within Apache in order to run\.\n.*?EOM\s*\n\s*)die/\1echo "WARNING: mod_cgi check bypassed inside Docker (KDV setup), proceeding without it." 1>&2\n        #die/s' /usr/sbin/koha-create \
+      || echo "WARNING: koha-create mod_cgi patch failed, please check manually."
+
+    # 3) Обхід фаталу "User ... already exists."
+    perl -0pi -e 's/(User [^\n]* already exists\.\n.*?EOM\s*\n\s*)die/\1echo "WARNING: instance user already exists (Docker KDV), skipping useradd and continuing." 1>&2\n        #die/s' /usr/sbin/koha-create \
+      || echo "WARNING: koha-create user-exists patch failed, please check manually."
   fi
 fi
+
+
 
 # --- Базові змінні ---
 export KOHA_INSTANCE=${KOHA_INSTANCE:-library}
@@ -43,6 +56,7 @@ source /usr/share/koha/bin/koha-functions.sh
 
 MB_PARAMS="--mb-host ${MB_HOST} --mb-port ${MB_PORT} --mb-user ${MB_USER} --mb-pass ${MB_PASS}"
 
+# [KDV] БІЛЬШЕ НЕ СТВОРЮЄМО КОРИСТУВАЧА ТУТ — ЙОГО СТВОРЮЄ koha-create
 # --- Користувач/група інстансу (library-koha) ---
 if ! id "${KOHA_INSTANCE}-koha" >/dev/null 2>&1; then
   addgroup --system "${KOHA_INSTANCE}-koha" || true

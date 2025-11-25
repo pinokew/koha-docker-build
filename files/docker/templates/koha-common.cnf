@@ -3,4 +3,5 @@
 [client]
 host     = ${MYSQL_SERVER}
 user     = root
-password = ${MYSQL_PASSWORD}
+password = ${DB_ROOT_PASS}
+

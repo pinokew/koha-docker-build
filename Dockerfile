@@ -47,12 +47,12 @@ RUN apt-get update \
     && rm -rf /var/cache/apt/archives/* \
     && rm -rf /var/lib/apt/lists/*
 # Створюємо системного користувача/групу для інстансу "library"
-RUN addgroup --system library-koha && \
-    adduser --system --ingroup library-koha \
-      --home /var/lib/koha/library \
-      --no-create-home \
-      --disabled-login \
-      library-koha
+#RUN addgroup --system library-koha && \
+#    adduser --system --ingroup library-koha \
+#      --home /var/lib/koha/library \
+#      --no-create-home \
+#      --disabled-login \
+#      library-koha
 
 RUN a2enmod rewrite \
     && a2enmod headers \

@@ -35,6 +35,7 @@ services:
       MB_USER: ${RABBITMQ_USER}
       MB_PASS: ${RABBITMQ_PASS}
       KOHA_CONF: /etc/koha/sites/library/koha-conf.xml
+      DB_ROOT_PASS: ${DB_ROOT_PASS}
 
     depends_on:
       db:
