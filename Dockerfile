@@ -46,13 +46,7 @@ RUN apt-get update \
        logrotate \
     && rm -rf /var/cache/apt/archives/* \
     && rm -rf /var/lib/apt/lists/*
-# Створюємо системного користувача/групу для інстансу "library"
-#RUN addgroup --system library-koha && \
-#    adduser --system --ingroup library-koha \
-#      --home /var/lib/koha/library \
-#      --no-create-home \
-#      --disabled-login \
-#      library-koha
+
 
 RUN a2enmod rewrite \
     && a2enmod headers \
@@ -63,11 +57,11 @@ RUN a2enmod rewrite \
     && mkdir -p /var/log/koha/apache \
     && mkdir -p /var/log/koha/apache
 
-# підкинути наші файли
+# Підкидаємо всі наші файли в образ
 COPY --chown=0:0 files/ /
 
-RUN chmod +x /etc/s6-overlay/scripts/02-setup-koha.sh
-
+# Гарантуємо, що обидва скрипти виконувані
+RUN chmod +x /etc/s6-overlay/scripts/02-setup-koha.sh \
 
 # модулі та конфіги Apache
 RUN a2enmod proxy proxy_http headers && \

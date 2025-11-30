@@ -1,21 +1,48 @@
 #!/bin/bash
 
-set -u
+# Трохи безпечний режим, але контрольований
+set -e
 
-if [ -f /proc/1/environ ]; then
-    while IFS='=' read -r -d '' key value 2>/dev/null || [ -n "$key" ]; do
-        case "$key" in
-            MYSQL_USER|MYSQL_PASSWORD|DB_NAME|MYSQL_SERVER|MB_HOST|MB_PORT|MB_USER|MB_PASS)
-                export "$key"="$value"
-                ;;
-        esac
-    done < /proc/1/environ
+echo "DEBUG[prepare-koha]: env snapshot (DB/RabbitMQ vars):"
+env | grep -E '^(MYSQL_|DB_NAME|MB_|RABBITMQ_)' || true
+echo "DEBUG[prepare-koha]: end of env snapshot"
+echo
+
+# ------------------------
+# 1) Перевіряємо, що критичні змінні задані через Docker env /.env
+#    НІЯКИХ дефолтів для логіна/пароля/бази!
+# ------------------------
+
+required_vars=(MYSQL_SERVER DB_NAME MYSQL_USER MYSQL_PASSWORD)
+missing=()
+
+for v in "${required_vars[@]}"; do
+  if [ -z "${!v:-}" ]; then
+    missing+=("$v")
+  fi
+done
+
+if [ "${#missing[@]}" -gt 0 ]; then
+  echo "ERROR[prepare-koha]: missing required environment variables: ${missing[*]}" >&2
+  echo "  Перевір .env і секцію environment: в docker-compose.yml для сервісу koha." >&2
+  exit 1
 fi
-# --- RabbitMQ credentials (з docker-compose environment) ---
-export MB_HOST="${MB_HOST:-rabbitmq}"
-export MB_PORT="${MB_PORT:-61613}"
-export MB_USER="${MB_USER:-guest}"
-export MB_PASS="${MB_PASS:-guest}"
+
+export MYSQL_SERVER DB_NAME MYSQL_USER MYSQL_PASSWORD
+
+# ------------------------
+# 2) RabbitMQ — можемо дати дефолти (але без пароля до БД)
+# ------------------------
+
+: "${MB_HOST:=rabbitmq}"
+: "${MB_PORT:=61613}"
+: "${MB_USER:=${RABBITMQ_USER:-guest}}"
+: "${MB_PASS:=${RABBITMQ_PASS:-guest}}"
+
+export MB_HOST MB_PORT MB_USER MB_PASS
+
+# Тепер можна включити строгіший режим
+set -u
 
 # --- ПАТЧ KOHA-CREATE: обхід вимог Apache та existing user/group в Docker (KDV) ---
 if [ -x /usr/sbin/koha-create ]; then
