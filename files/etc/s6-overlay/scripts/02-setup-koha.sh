@@ -104,16 +104,6 @@ chmod 660 /etc/mysql/koha-common.cnf
 # Функції Koha
 source /usr/share/koha/bin/koha-functions.sh
 
-# --- Користувач/група інстансу (library-koha) ---
-if ! id "${KOHA_INSTANCE}-koha" >/dev/null 2>&1; then
-  addgroup --system "${KOHA_INSTANCE}-koha" || true
-  adduser --system \
-    --ingroup "${KOHA_INSTANCE}-koha" \
-    --home "/var/lib/koha/${KOHA_INSTANCE}" \
-    --no-create-home \
-    --disabled-login \
-    "${KOHA_INSTANCE}-koha" || true
-fi
 
 # --- Elasticsearch параметри для koha-create ---
 ES_PARAMS=""
@@ -121,16 +111,22 @@ if [[ "${USE_ELASTICSEARCH:-false}" = "true" ]]; then
   ES_PARAMS="--elasticsearch-server ${ELASTICSEARCH_HOST}"
 fi
 
-# --- Файлова система: логи, кеш, спулі, run ---
+# --- Логи Apache + Koha ---
+# Створюємо базовий каталог логів + підкаталог для інстансу
+mkdir -p /var/log/koha/apache "/var/log/koha/${KOHA_INSTANCE}" 2>/dev/null || true
 
-# Логи Apache + Koha
-mkdir -p /var/log/koha /var/log/koha/apache "/var/log/koha/${KOHA_INSTANCE}"
+# Створюємо файли логів, які згадані у vhost-файлі
 touch \
   "/var/log/koha/${KOHA_INSTANCE}/opac-error.log" \
   "/var/log/koha/${KOHA_INSTANCE}/intranet-error.log" \
-  "/var/log/koha/${KOHA_INSTANCE}/plack.log"
+  "/var/log/koha/${KOHA_INSTANCE}/plack-error.log" 2>/dev/null || true
 
-# Кеш, спулі, дані Koha, run
+# Даємо apache нормальні права
+chown -R www-data:www-data /var/log/koha 2>/dev/null || true
+chmod 750 /var/log/koha "/var/log/koha/${KOHA_INSTANCE}" 2>/dev/null || true
+
+
+# Кеш, спулі, дані Koha, run (також ідемпотентно)
 for d in \
   /var/spool/koha \
   "/var/spool/koha/${KOHA_INSTANCE}" \
@@ -141,21 +137,9 @@ for d in \
   /var/run/koha \
   "/var/run/koha/${KOHA_INSTANCE}"
 do
-  [ -d "$d" ] || mkdir -p "$d"
+  mkdir -p "$d" 2>/dev/null || true
 done
 
-# Власник + права
-chown -R "${KOHA_INSTANCE}-koha:${KOHA_INSTANCE}-koha" \
-  /var/log/koha \
-  /var/spool/koha \
-  /var/cache/koha \
-  /var/lib/koha \
-  /var/run/koha
-
-chmod 755 /var/log/koha /var/log/koha/apache "/var/log/koha/${KOHA_INSTANCE}" \
-          /var/run/koha "/var/run/koha/${KOHA_INSTANCE}"
-chmod -R g+rwX /var/spool/koha /var/cache/koha /var/lib/koha
-chmod g+s "/var/spool/koha/${KOHA_INSTANCE}" || true
 
 # DEBUG: перевірка змінних перед записом
 echo "DEBUG: Variables before writing /etc/koha/passwd:"
@@ -180,12 +164,55 @@ if ! is_instance "${KOHA_INSTANCE}" || [ ! -f "/etc/koha/sites/${KOHA_INSTANCE}/
   echo "  MB_PORT=${MB_PORT}"
   echo "  MB_USER=${MB_USER}"
   echo "  MB_PASS=${MB_PASS}"
+
+  # Тимчасово вимикаємо set -e, щоб не впасти, навіть якщо koha-create поверне 1
+  set +e
   koha-create --timezone "${TZ}" --use-db "${KOHA_INSTANCE}" \
     ${ES_PARAMS:+$ES_PARAMS} \
     --mb-host "${MB_HOST}" --mb-port "${MB_PORT}" --mb-user "${MB_USER}" --mb-pass "${MB_PASS}"
+  KOHACREATE_RC=$?
+  set -e
+
+  echo "DEBUG: koha-create exited with code ${KOHACREATE_RC}"
 else
   koha-create-dirs "${KOHA_INSTANCE}"
 fi
+
+# --- Фікс Apache vhost: прибираємо mpm_itk-директиву AssignUserID ---
+for v in \
+  "/etc/apache2/sites-available/${KOHA_INSTANCE}.conf" \
+  "/etc/apache2/sites-enabled/${KOHA_INSTANCE}.conf" \
+  "/etc/apache2/sites-enabled/library.conf"
+do
+  if [ -f "$v" ]; then
+    sed -i '/^[[:space:]]*AssignUserID[[:space:]].*$/d' "$v" || true
+  fi
+done
+
+# Пересвідчуємось, що enabled-vhost посилається на sites-available
+if [ -f "/etc/apache2/sites-available/${KOHA_INSTANCE}.conf" ]; then
+  ln -sf "../sites-available/${KOHA_INSTANCE}.conf" \
+    "/etc/apache2/sites-enabled/${KOHA_INSTANCE}.conf"
+fi
+
+# --- Власник + права після успішного koha-create ---
+if id "${KOHA_INSTANCE}-koha" >/dev/null 2>&1; then
+  # Права для внутрішніх директорій Koha (де працюють демони під library-koha)
+  chown -R "${KOHA_INSTANCE}-koha:${KOHA_INSTANCE}-koha" \
+    /var/spool/koha \
+    /var/cache/koha \
+    /var/lib/koha \
+    /var/run/koha 2>/dev/null || true
+
+  chmod -R g+rwX /var/spool/koha /var/cache/koha /var/lib/koha 2>/dev/null || true
+  chmod 755 /var/run/koha "/var/run/koha/${KOHA_INSTANCE}" 2>/dev/null || true
+  chmod g+s "/var/spool/koha/${KOHA_INSTANCE}" 2>/dev/null || true
+
+  # /var/log/koha *не чіпаємо тут* — ним займається apache/koha-create
+else
+  echo "WARNING: user ${KOHA_INSTANCE}-koha does not exist yet, skip chown."
+fi
+
 
 
 # --- Глобальний symlink koha-conf.xml ---
@@ -222,6 +249,7 @@ if [ -f "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml" ]; then
         $in_config = 0 if /<\/config>/;
     ' "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml"
 fi
+
 
 # --- АВТОМАТИЧНЕ ВИПРАВЛЕННЯ RABBITMQ (Метод SED) ---
 if [ -f "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml" ]; then
