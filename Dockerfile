@@ -48,9 +48,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # KDV: виправляємо створення каталогу логів у koha-create (не падати, якщо вже існує)
-RUN sed -i 's#mkdir "/var/log/koha/\$name"#mkdir -p "/var/log/koha/$name" || true#' /usr/sbin/koha-create \
- && sed -i 's#chown "$username:$username" "/var/log/koha/\$name"#chown "$username:$username" "/var/log/koha/$name" || true#' /usr/sbin/koha-create \
- && sed -i 's#chown $username:$username /var/log/koha/\$name/\*\.log#chown $username:$username /var/log/koha/$name/*.log || true#' /usr/sbin/koha-create || true
+RUN sed -i 's#mkdir "/var/log/koha/\$name"#mkdir -p "/var/log/koha/\$name" || true#' /usr/sbin/koha-create \
+ && sed -i 's#chown "$username:$username" "/var/log/koha/\$name"#chown "$username:$username" "/var/log/koha/\$name" || true#' /usr/sbin/koha-create \
+ && sed -i 's#chown $username:$username /var/log/koha/\$name/\*\.log#chown $username:$username /var/log/koha/\$name/*.log || true#' /usr/sbin/koha-create || true
 
  
 RUN a2enmod rewrite \
