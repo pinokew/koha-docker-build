@@ -88,7 +88,7 @@ RABBITMQ_DEFAULT_PASS=RabbitPass789!
 
 ```
 
-### Step 3: Download & Patch Templates (Critical)
+### Step 3: Download & Patch Templates (For the version of Koha 25.05.xx not required)
 
 Before building images, you must generate the correct configuration files using the official Koha templates.
 
