@@ -1,1 +1,3 @@
+#!/command/execlineb -P
+with-contenv
 /etc/s6-overlay/scripts/02-setup-koha.sh

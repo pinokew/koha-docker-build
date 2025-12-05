@@ -46,14 +46,13 @@ RUN apt-get update \
        logrotate \
     && rm -rf /var/cache/apt/archives/* \
     && rm -rf /var/lib/apt/lists/*
-# Створюємо системного користувача/групу для інстансу "library"
-RUN addgroup --system library-koha && \
-    adduser --system --ingroup library-koha \
-      --home /var/lib/koha/library \
-      --no-create-home \
-      --disabled-login \
-      library-koha
 
+# KDV: виправляємо створення каталогу логів у koha-create (не падати, якщо вже існує)
+RUN sed -i 's#mkdir "/var/log/koha/\$name"#mkdir -p "/var/log/koha/\$name" || true#' /usr/sbin/koha-create \
+ && sed -i 's#chown "$username:$username" "/var/log/koha/\$name"#chown "$username:$username" "/var/log/koha/\$name" || true#' /usr/sbin/koha-create \
+ && sed -i 's#chown $username:$username /var/log/koha/\$name/\*\.log#chown $username:$username /var/log/koha/\$name/*.log || true#' /usr/sbin/koha-create || true
+
+ 
 RUN a2enmod rewrite \
     && a2enmod headers \
     && a2enmod proxy_http \
@@ -63,10 +62,21 @@ RUN a2enmod rewrite \
     && mkdir -p /var/log/koha/apache \
     && mkdir -p /var/log/koha/apache
 
-# підкинути наші файли
+RUN mkdir -p /docker/templates /usr/share/koha/etc
+
+# koha-conf-site.xml.in потрібен koha-create → кладемо туди, де його шукатиме Koha
+COPY files/docker/templates/koha-conf-site.xml.in /usr/share/koha/etc/koha-conf-site.xml.in
+# Підкидаємо всі наші файли в образ
 COPY --chown=0:0 files/ /
 
-RUN chmod +x /etc/s6-overlay/scripts/02-setup-koha.sh
+# === KDV: Koha templates ===
+# /docker/templates вже приїхав із хоста завдяки COPY files/ /
+# Нам потрібно тільки покласти патчений koha-conf-site.xml.in туди, де його чекає Koha
+RUN mkdir -p /usr/share/koha/etc && \
+    cp /docker/templates/koha-conf-site.xml.in /usr/share/koha/etc/koha-conf-site.xml.in
+
+# Гарантуємо, що скрипти s6 виконувані
+RUN chmod +x /etc/s6-overlay/scripts/*.sh
 
 
 # модулі та конфіги Apache
