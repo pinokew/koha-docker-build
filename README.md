@@ -1,115 +1,100 @@
+Koha Docker (v25.05 Production Ready) 🐳📚
+A fully operational, modern Docker configuration for deploying Koha ILS (Integrated Library System) v25.05.
+This repository provides a robust, microservices-based architecture designed for stability, performance, and ease of deployment on both Linux and Windows (WSL 2) environments.
+✨ Key Features
+This build moves away from legacy CGI methods to a modern Plack-based architecture.
+Core Version: Koha 25.05 (stable).
+Architecture: True microservices approach (Koha, MariaDB, Elasticsearch, Memcached, RabbitMQ running in isolated containers).
+Web Server: Apache2 + Plack (Starman). Delivers significantly higher performance and lower latency compared to the traditional CGI mode.
+Search Engine: Elasticsearch 8.19.6 (pre-configured with analysis-icu plugin for correct multilingual support).
+Database: MariaDB 11.
+Caching: Memcached (for session handling and system acceleration).
+Message Broker: RabbitMQ (with STOMP plugin enabled). Essential for real-time indexing and background tasks.
+🛠️ Enhancements & Architecture Fixes
+This repository solves common pain points found in standard Koha Docker setups.
+1. Windows (WSL 2) Compatibility 🪟
+EOL Fixes: Integrated dos2unix conversion during the build process to automatically fix Windows CRLF line endings in scripts, preventing container startup failures.
+Permission Handling: Optimized for WSL 2 file system quirks.
+2. "The Big Split" Architecture 🏗️
+We separated configuration logic to ensure stability:
+Build-Time (patch-koha-templates.sh): Generates perfect configuration templates (koha-conf.xml, log4perl.conf) on the host using .env variables before the container starts.
+Run-Time (02-setup-koha.sh): Handles initialization, database connectivity, and service startup inside the container.
+3. Stability & Performance 🚀
+Permissions Hell Solved: Runs services under a dedicated system user library-koha (UID 1000) instead of root or www-data, fixing 503 Service Unavailable and permission denied errors.
+Race Condition Fix: docker-compose.yml includes strict healthcheck conditions. Koha waits until MariaDB and RabbitMQ are fully healthy before attempting to start.
+Auto-Indexing: The koha-es-indexer daemon is configured to start automatically, ensuring real-time search indexing without manual cron jobs.
+4. Backup & Disaster Recovery 🛡️
+Included Scripts: ready-to-use backup.sh and restore.sh scripts.
+Full Cycle: Backs up SQL data, configuration volumes, and local files. Restore script handles volume cleaning and full re-indexing automatically.
+🚀 Installation Guide
+Prerequisites
+Docker Desktop (Windows) or Docker Engine (Linux).
+Windows Users: Ensure you are using the WSL 2 backend.
+Git
+Step 1: Clone the Repository
+git clone [https://github.com/YOUR_USERNAME/YOUR_REPO.git](https://github.com/YOUR_USERNAME/YOUR_REPO.git)
+cd YOUR_REPO/examples
 
-````markdown
-# Koha Docker (v25.05 ready) 🐳📚
 
-Цей репозиторій містить **повністю робочу** Docker-конфігурацію для запуску автоматизованої бібліотечної системи **Koha версії 25.05**.
+(Note: The main docker-compose.yaml and configuration files are located in the examples directory).
+Step 2: Environment Setup
+Create your .env file from the example template.
+cp .env.example .env
 
-Проєкт є форком/модифікацією чудового репозиторію [teogramm/koha-docker](https://github.com/teogramm/koha-docker.git), адаптованим для стабільної роботи в середовищі **Windows + WSL 2** (хоча чудово працюватиме і на чистому Linux).
 
-![Koha Logo](https://koha-community.org/images/koha-logo-navbar.png)
-
----
-
-## ✨ Особливості та Фічі
-
-Ця збірка Koha — це сучасний, швидкий та надійний варіант для розгортання бібліотеки.
-
-* **Версія Koha:** 25.05 (встановлюється з офіційних репозиторіїв Debian).
-* **Архітектура:** Мікросервісна (Koha, База даних, Пошук, Кеш, Черги — все в окремих контейнерах).
-* **Веб-сервер:** Apache2 + **Plack (Starman)**. Це забезпечує значно вищу швидкість роботи порівняно зі старим CGI-режимом.
-* **Пошуковий рушій:** **Elasticsearch 8.19.6** (з попередньо встановленим плагіном `analysis-icu` для коректної роботи з різними мовами).
-* **База даних:** MariaDB 11.
-* **Кешування:** Memcached (для прискорення роботи сесій та системи).
-* **Черги повідомлень:** **RabbitMQ** (з плагіном STOMP). Необхідний для сучасних фонових завдань Koha та реального часу оновлення інформації.
-
----
-
-## 🛠️ Що було змінено відносно оригіналу
-
-Оригінальний репозиторій був чудовою базою, але потребував доопрацювання для роботи на сучасних версіях Koha та в специфічних умовах Windows/WSL.
-
-**Внесені ключові зміни:**
-
-1.  **Адаптація для Windows (WSL 2):**
-    * Додано утиліту `dos2unix` у процес збірки. Вона автоматично виправляє проблему з Windows-закінченнями рядків (CRLF) у скриптах, через які контейнери "падали" при запуску на Windows-хостах.
-2.  **Оновлення компонентів:**
-    * Додано підтримку **Elasticsearch 8.x** із автоматичним встановленням обов'язкового плагіна `analysis-icu` під час збірки.
-    * Оновлено версії базових образів.
-3.  **Виправлення конфігурації (`docker-compose.yaml`):**
-    * Додано коректні `healthcheck` (перевірки здоров'я) для бази даних та RabbitMQ. Це вирішує проблему "гонки", коли Koha намагалася запуститися раніше, ніж база даних була готова.
-    * Сервіс Koha тепер чекає на повну готовність (`service_healthy`) інших сервісів перед стартом.
-    * Виправлено монтування плагінів RabbitMQ (тепер використовується вбудований образ замість локальної папки, що уникає проблем з правами доступу на Windows).
-4.  **Параметризація:**
-    * Усі секрети (паролі, назви баз даних) винесені у файл `.env`, що робить конфігурацію безпечнішою та гнучкішою.
-
----
-
-## 🚀 Інструкція зі Встановлення
-
-### Передумови
-* Встановлений **Docker Desktop** (на Windows) або Docker Engine (на Linux).
-* Якщо ви на Windows, переконайтеся, що використовуєте **WSL 2** бекенд.
-
-### Крок 1: Клонування репозиторію
-
-```bash
-git clone [https://github.com/ВАШ_ЛОГІН/ВАШ_РЕПОЗИТОРІЙ.git](https://github.com/ВАШ_ЛОГІН/ВАШ_РЕПОЗИТОРІЙ.git)
-cd ВАШ_РЕПОЗИТОРІЙ/examples
-````
-
-*(Зверніть увагу: основний робочий файл `docker-compose.yaml` знаходиться в папці `examples`)*
-
-### Крок 2: Налаштування оточення (`.env`)
-
-У папці `examples` створіть файл `.env` на основі наданого прикладу `.env.example`.
-
-**Обов'язково змініть стандартні паролі на надійні\!**
-
-```env
-# Приклад вмісту .env
+⚠️ Important: Open .env and change the default passwords!
+# .env example
 KOHA_IMAGE_TAG=25.05
-KOHA_IMAGE_NAME=koha-local
 KOHA_INSTANCE=library
-KOHA_DOMAIN=.localhost
-
 DB_NAME=koha_library
+
+# SECURITY WARNING: Change these passwords!
 DB_USER=koha_library
-DB_PASS=ВашДужеСкладнийПароль123!      # <--- Змініть це!
-DB_ROOT_PASS=ВашСуперСкладнийРутПароль456! # <--- Змініть це!
-```
+DB_PASS=SecurePassword123!
+DB_ROOT_PASS=SuperRootPassword456!
+RABBITMQ_DEFAULT_PASS=RabbitPass789!
 
-### Крок 3: Запуск
 
-Виконайте цю команду з папки `examples`. Перший запуск займе певний час (5-15 хвилин), оскільки Docker буде збирати образи з нуля.
+Step 3: Build and Launch
+Run the following command. The first build may take 5–15 minutes.
+docker compose up -d --build
 
-```powershell
-docker-compose up -d --build
-```
 
-Зачекайте 1-2 хвилини після завершення команди, щоб усі сервіси ініціалізувалися (статус `Healthy`).
+Wait 1–2 minutes after the containers are up for the initialization scripts to complete (look for "healthy" status).
+Step 4: Web Installer
+Open your browser and navigate to the Koha Staff Interface:
+👉 http://localhost:8081
+Login: Use the value of DB_USER from your .env (e.g., koha_library).
+Password: Use the value of DB_PASS from your .env.
+Follow the on-screen wizard to create your library administrator account and configure basic settings.
+📂 Administration & Maintenance
+Backup & Restore
+This repository includes custom scripts for data safety.
+Backup:
+./backup.sh
 
-### Крок 4: Веб-інсталятор
+Creates a timestamped folder in ./backups containing SQL dumps and volume archives.
+Restore:
+Edit restore.sh to point to your backup folder, then run:
+./restore.sh
 
-Відкрийте браузер і перейдіть до адмін-панелі Koha:
-👉 **http://localhost:8081**
+Warning: This destroys current data and replaces it with the backup.
+Useful Commands
+# Stop all containers
+docker compose down
 
-Ви побачите веб-інсталятор Koha.
+# Stop and remove volumes (DANGER: Deletes all data!)
+docker compose down -v
 
-  * **Логін:** Введіть значення `DB_USER` з вашого `.env` (наприклад, `koha_library`).
-  * **Пароль:** Введіть значення `DB_PASS` з вашого `.env`.
+# View Koha logs
+docker compose logs -f koha
 
-Пройдіть кроки інсталятора, створіть адміністратора бібліотеки, і ваша Koha готова до роботи\!
+# Enter the Koha container shell
+docker compose exec koha bash
 
------
+# Rebuild search index manually
+docker compose exec koha koha-elasticsearch --rebuild -d -v library
 
-## 📂 Корисні команди
 
-  * **Зупинити все:** `docker-compose down`
-  * **Знищити все (включно з даними\!):** `docker-compose down -v`
-  * **Переглянути логи Koha:** `docker-compose logs -f koha`
-  * **Зайти в контейнер Koha:** `docker-compose exec koha bash`
-
-<!-- end list -->
-
-```
-```
+📜 License
+This project is licensed under the GPL v3, consistent with the Koha project.
