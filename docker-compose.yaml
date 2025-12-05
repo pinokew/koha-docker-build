@@ -141,20 +141,6 @@ services:
       - koha
     restart: always
 
-  tunnel:
-    image: ngrok/ngrok:latest
-    container_name: koha_tunnel
-    restart: unless-stopped
-    # 👇 ВАЖЛИВО: Ми повертаємо мережу, щоб він бачив 'koha'
-    networks:
-      - kohanet
-    command: http koha:8081
-    environment:
-      - NGROK_AUTHTOKEN=ТВІЙ_ТОКЕН_ТУТ
-    depends_on:
-      koha:
-        condition: service_healthy
-
 volumes:
   mariadb-koha:
   koha_config:
