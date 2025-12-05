@@ -1,3 +1,5 @@
+# README
+
 # Koha Docker (v25.05 Production Ready) 🐳📚
 
 **A fully operational, modern Docker configuration for deploying Koha ILS (Integrated Library System) v25.05.**
@@ -86,7 +88,42 @@ RABBITMQ_DEFAULT_PASS=RabbitPass789!
 
 ```
 
-### Step 3: Build and Launch
+### Step 3: Download & Patch Templates (Critical)
+
+Before building images, you must generate the correct configuration files using the official Koha templates.
+
+1. Download Source Templates:
+    
+    Go to the official Koha Git repository: https://git.koha-community.org/Koha-community/Koha.
+    
+    Select the branch/tag corresponding to your target version (e.g., v25.05.x) and navigate to debian/templates. Download the following files:
+    
+    - `koha-conf-site.xml.in`
+    - `koha-common.cnf`
+    - `koha-sites.conf`
+    - `SIPconfig.xml`
+    
+    Save them to a local folder on your machine.
+    
+2. Configure the Patch Script:
+    
+    Open the patch-koha-templates.sh script in a text editor.
+    
+    Find and update the path variables to match your environment:
+    
+    - Set the path to the folder where you downloaded the `.in` files.
+    - Set the path to the root of your `koha-docker` directory.
+3. **Run the Script:**
+    
+    ```
+    ./patch-koha-templates.sh
+    
+    ```
+    
+
+**⚠️ STOP AND VERIFY:** Proceed to Step 4 **only if** the script runs successfully and the patched files are correctly written to the `files/docker/templates` directory. If this step fails, the Docker build will not contain the correct configurations.
+
+### Step 4: Build and Launch
 
 Run the following command. The first build may take 5–15 minutes.
 
@@ -97,7 +134,7 @@ docker compose up -d --build
 
 Wait 1–2 minutes after the containers are up for the initialization scripts to complete (look for "healthy" status).
 
-### Step 4: Web Installer
+### Step 5: Web Installer
 
 Open your browser and navigate to the Koha Staff Interface:
 
