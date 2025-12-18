@@ -1,6 +1,6 @@
 #!/bin/bash
 # Чекаємо 15 секунд, щоб мережа та DNS точно піднялися
-sleep 15
+sleep 60
 
 cd $HOME/Koha/koha-doker
 
