@@ -1,6 +1,6 @@
 name: Build and Push Koha Image
 
-# Коли запускати цей пайплайн:
+# Коли запускати цей пайплайн
 on:
   push:
     branches:
