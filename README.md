@@ -32,7 +32,7 @@ This repository solves common pain points found in standard Koha Docker setups.
 We separated configuration logic to ensure stability:
 
 - **Build-Time (`patch-koha-templates.sh`):** Generates perfect configuration templates (`koha-conf.xml`, `log4perl.conf`) on the host using `.env` variables *before* the container starts.
-- **Run-Time (`02-setup-koha.sh`):** Handles initialization, database connectivity, and service startup inside the container.
+- **Run-Time (`scripts/koha-setup/00-runner.sh`):** Автоматично запускає пронумеровані кроки налаштування (`scripts/koha-setup/steps/00-*.sh`, `01-*.sh`, ...), тож нові етапи можна додавати без переписування entrypoint.
 
 ### 3. Stability & Performance 🚀
 

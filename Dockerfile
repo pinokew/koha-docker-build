@@ -68,6 +68,8 @@ RUN mkdir -p /docker/templates /usr/share/koha/etc
 COPY files/docker/templates/koha-conf-site.xml.in /usr/share/koha/etc/koha-conf-site.xml.in
 # Підкидаємо всі наші файли в образ
 COPY --chown=0:0 files/ /
+# Runtime-пайплайн налаштування з кореня репозиторію
+COPY --chown=0:0 scripts/koha-setup/ /etc/s6-overlay/scripts/
 
 # === KDV: Koha templates ===
 # /docker/templates вже приїхав із хоста завдяки COPY files/ /
@@ -75,8 +77,8 @@ COPY --chown=0:0 files/ /
 RUN mkdir -p /usr/share/koha/etc && \
     cp /docker/templates/koha-conf-site.xml.in /usr/share/koha/etc/koha-conf-site.xml.in
 
-# Гарантуємо, що скрипти s6 виконувані
-RUN chmod +x /etc/s6-overlay/scripts/*.sh
+# Гарантуємо, що скрипти s6 виконувані (включно з підпапками)
+RUN find /etc/s6-overlay/scripts -type f -name "*.sh" -exec chmod +x {} \;
 
 
 # модулі та конфіги Apache
