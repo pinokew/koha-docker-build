@@ -10,10 +10,23 @@ on:
       - 'docs/**'
   workflow_dispatch: # Дозволяє запустити збірку вручну кнопкою з інтерфейсу GitHub
 
+# Мінімально необхідні права для цього workflow
+permissions:
+  contents: read
+
+# Захист від паралельних пушів одного й того ж workflow
+concurrency:
+  group: koha-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: pinokew/koha
+  KOHA_VERSION: "25.05"
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       # 1. Завантажуємо код з репозиторію
       - name: Checkout repository
@@ -37,10 +50,12 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          # ТУТ ВАЖЛИВО: Заміни 'yourusername' на свій реальний логін Docker Hub!
+          build-args: |
+            KOHA_VERSION=${{ env.KOHA_VERSION }}
           tags: |
-            pinokew/koha:25.05
-            pinokew/koha:latest
+            ${{ env.IMAGE_NAME }}:${{ env.KOHA_VERSION }}
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
           # Використовуємо кеш GitHub Actions, щоб наступні збірки були у 2-3 рази швидшими
           cache-from: type=gha
           cache-to: type=gha,mode=max
