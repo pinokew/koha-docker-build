@@ -1,5 +1,5 @@
 # Koha Docker Image (`pinokew/koha`)
-GitHub Repo Link: [text](https://github.com/pinokew/koha-docker-build)
+[GitHub Repo Link](https://github.com/pinokew/koha-docker-build)
 
 Public, clean Koha image for Docker-based deployments.
 
