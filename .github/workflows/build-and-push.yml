@@ -24,7 +24,38 @@ env:
   KOHA_VERSION: "25.05"
 
 jobs:
+  # ==========================================
+  # НОВИЙ БЛОК: 1. CI-Checks (Pre-build Security & Linting)
+  # ==========================================
+  ci-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v6
+
+      - name: 🐚 Run Shellcheck (Script Validation)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          # Перевіряємо всі bash-скрипти у папці scripts. Поки що не блокуємо пайплайн при warnings (|| true).
+          find scripts -type f -name "*.sh" -print0 | xargs -0 shellcheck -e SC1090,SC1091,SC2034,SC2046,SC2086,SC2155 || echo "Shellcheck warnings found, please review."
+
+      - name: 🛡️ Trivy Config Scan (Critical gate for IaC & Secrets)
+        uses: aquasecurity/trivy-action@0.34.0
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          hide-progress: false
+          format: 'table'
+          severity: 'CRITICAL'
+          exit-code: '1' # Блокує збірку, якщо в Dockerfile або коді є критичні дірки (наприклад, захардкоджені секрети або запуск від root)
+
+  # ==========================================
+  # 2. Build & Push (Поточний блок, що залежить від CI)
+  # ==========================================
   build:
+    needs: ci-checks # НОВИЙ БЛОК: Збірка почнеться ТІЛЬКИ якщо код пройшов перевірку ci-checks
     runs-on: ubuntu-latest
 
     steps:
@@ -68,3 +99,15 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.IMAGE_NAME }} 
           readme-filepath: ./README.md
+
+      # ==========================================
+      # НОВИЙ БЛОК: 6. Trivy Image Scan (Post-build Security)
+      # ==========================================
+      - name: 🛡️ Trivy Image Scan (Critical gate for CVEs)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:sha-${{ github.sha }} # Скануємо щойно зібраний образ за його унікальним SHA
+          format: 'table'
+          severity: 'CRITICAL'
+          exit-code: '1' # Фейлить пайплайн, якщо в системних пакетах є CRITICAL вразливості
+          ignore-unfixed: true # Ігнорує вразливості, для яких ще немає патча від розробників Debian/Ubuntu
