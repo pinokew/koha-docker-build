@@ -133,6 +133,6 @@ jobs:
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4
         with:
-          subject-name: ${{ env.IMAGE_NAME }}
+          subject-name: docker.io/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.push_image.outputs.digest }}
           push-to-registry: true
