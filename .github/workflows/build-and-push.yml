@@ -30,7 +30,7 @@ jobs:
     steps:
       # 1. Завантажуємо код з репозиторію
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # 2. Налаштовуємо середовище для збірки Docker (додає підтримку багатоплатформенності та кешу)
       - name: Set up Docker Buildx
@@ -45,7 +45,7 @@ jobs:
 
       # 4. Збираємо образ і відправляємо його (Push)
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
@@ -59,3 +59,12 @@ jobs:
           # Використовуємо кеш GitHub Actions, щоб наступні збірки були у 2-3 рази швидшими
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # 5. Автоматичне оновлення опису на Docker Hub
+      - name: Update Docker Hub Description
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.IMAGE_NAME }} 
+          readme-filepath: ./README.md

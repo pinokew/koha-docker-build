@@ -2,7 +2,7 @@ FROM debian:bookworm
 
 ENV DEBIAN_FRONTEND noninteractive
 ARG S6_OVERLAY_VERSION=3.2.0.2
-ARG KOHA_VERSION=24.11
+ARG KOHA_VERSION=25.05
 ARG TARGETARCH
 
 LABEL org.opencontainers.image.source=https://github.com/teorgamm/koha-docker
