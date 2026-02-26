@@ -62,20 +62,13 @@ RUN a2enmod rewrite \
     && mkdir -p /var/log/koha/apache \
     && mkdir -p /var/log/koha/apache
 
-RUN mkdir -p /docker/templates /usr/share/koha/etc
+RUN mkdir -p /usr/share/koha/etc
 
-# koha-conf-site.xml.in потрібен koha-create → кладемо туди, де його шукатиме Koha
-COPY files/docker/templates/koha-conf-site.xml.in /usr/share/koha/etc/koha-conf-site.xml.in
 # Підкидаємо всі наші файли в образ
 COPY --chown=0:0 files/ /
 # Runtime-пайплайн налаштування з кореня репозиторію
 COPY --chown=0:0 scripts/koha-setup/ /etc/s6-overlay/scripts/
 
-# === KDV: Koha templates ===
-# /docker/templates вже приїхав із хоста завдяки COPY files/ /
-# Нам потрібно тільки покласти патчений koha-conf-site.xml.in туди, де його чекає Koha
-RUN mkdir -p /usr/share/koha/etc && \
-    cp /docker/templates/koha-conf-site.xml.in /usr/share/koha/etc/koha-conf-site.xml.in
 
 # Гарантуємо, що скрипти s6 виконувані (включно з підпапками)
 RUN find /etc/s6-overlay/scripts -type f -name "*.sh" -exec chmod +x {} \;
@@ -89,10 +82,9 @@ RUN a2enmod proxy proxy_http headers && \
 # (опційно) переконатися, що sites-enabled посилається на наш vhost
 RUN ln -sf ../sites-available/library.conf /etc/apache2/sites-enabled/library.conf
 
-# Виправляємо CRLF у конфігах s6-overlay (+ шаблони, якщо є)
+# Виправляємо CRLF у конфігах s6-overlay
 RUN apt-get update && apt-get install -y dos2unix && \
     { find /etc/s6-overlay -type f -print0 | xargs -0 dos2unix; } && \
-    { [ -d /docker/templates ] && find /docker/templates -type f -print0 | xargs -0 dos2unix || true; } && \
     apt-get purge -y dos2unix && rm -rf /var/lib/apt/lists/*
 
 # -----------------------

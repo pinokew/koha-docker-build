@@ -22,13 +22,6 @@ koha-create --timezone "${TZ}" --use-db "${KOHA_INSTANCE}" "${ES_PARAMS[@]}" \
 KOHA_CREATE_RC=$?
 set -e
 
-if [ -f /docker/templates/koha-conf-site.xml.in ]; then
-  rm -f "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml"
-  cp /docker/templates/koha-conf-site.xml.in "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml"
-  chown "${KOHA_USER}:${KOHA_USER}" "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml"
-  chmod 640 "/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml"
-fi
-
 if [ "${KOHA_CREATE_RC}" -ne 0 ]; then
   echo "WARNING: koha-create failed with code ${KOHA_CREATE_RC}"
   exit "${KOHA_CREATE_RC}"
