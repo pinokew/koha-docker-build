@@ -33,6 +33,7 @@ matches_glob_list() {
   local glob=""
 
   for glob in ${glob_list}; do
+    # shellcheck disable=SC2053
     if [[ "${value}" == ${glob} ]]; then
       return 0
     fi
