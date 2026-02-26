@@ -11,6 +11,7 @@ LABEL org.opencontainers.image.source=https://github.com/teorgamm/koha-docker
 RUN apt-get  update \
     && apt-get install -y --no-install-recommends \
             wget \
+            ca-certificates \
             apache2 \
             gnupg2 \
             apt-transport-https \
@@ -25,6 +26,7 @@ RUN echo "${TARGETARCH}" && case "${TARGETARCH}" in \
             "amd64")  S6_ARCH=x86_64  ;; \
             "arm64")  S6_ARCH=aarch64  ;; \
             "arm")  S6_ARCH=armhf ;; \
+            *) echo "Unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
         esac \
     && wget -P /tmp/ -q "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" \
     && tar -C / -Jxpf "/tmp/s6-overlay-${S6_ARCH}.tar.xz"
@@ -41,7 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends locales && \
     rm -rf /var/lib/apt/lists/*
 # Install Koha
 RUN apt-get update \
-    && apt-get install -y koha-core \
+    && apt-get install -y --no-install-recommends koha-core \
        idzebra-2.0 \
        apache2 \
        logrotate \
