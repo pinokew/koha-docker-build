@@ -1,20 +1,23 @@
 name: Build and Push Koha Image
 
-# Коли запускати цей пайплайн
 on:
   push:
     branches:
-      - main # Запускати автоматично при пуші в гілку main
+      - main
     paths-ignore:
-      - 'README.md' # Не збирати образ, якщо ми просто виправили документацію
       - 'docs/**'
-  workflow_dispatch: # Дозволяє запустити збірку вручну кнопкою з інтерфейсу GitHub
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+  workflow_dispatch:
 
-# Мінімально необхідні права для цього workflow
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
-# Захист від паралельних пушів одного й того ж workflow
 concurrency:
   group: koha-image-${{ github.ref }}
   cancel-in-progress: true
@@ -24,58 +27,73 @@ env:
   KOHA_VERSION: "25.05"
 
 jobs:
-  # ==========================================
-  # НОВИЙ БЛОК: 1. CI-Checks (Pre-build Security & Linting)
-  # ==========================================
   ci-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v6
-
-      - name: 🐚 Run Shellcheck (Script Validation)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
-          # Перевіряємо всі bash-скрипти у папці scripts. Поки що не блокуємо пайплайн при warnings (|| true).
-          find scripts -type f -name "*.sh" -print0 | xargs -0 shellcheck -e SC1090,SC1091,SC2034,SC2046,SC2086,SC2155 || echo "Shellcheck warnings found, please review."
-
-      - name: 🛡️ Trivy Config Scan (Critical gate for IaC & Secrets)
-        uses: aquasecurity/trivy-action@0.34.0
-        with:
-          scan-type: 'config'
-          scan-ref: '.'
-          hide-progress: false
-          format: 'table'
-          severity: 'CRITICAL'
-          exit-code: '1' # Блокує збірку, якщо в Dockerfile або коді є критичні дірки (наприклад, захардкоджені секрети або запуск від root)
-
-  # ==========================================
-  # 2. Build & Push (Поточний блок, що залежить від CI)
-  # ==========================================
-  build:
-    needs: ci-checks # НОВИЙ БЛОК: Збірка почнеться ТІЛЬКИ якщо код пройшов перевірку ci-checks
-    runs-on: ubuntu-latest
 
     steps:
-      # 1. Завантажуємо код з репозиторію
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      # 2. Налаштовуємо середовище для збірки Docker (додає підтримку багатоплатформенності та кешу)
+      - name: Run Shellcheck (gate)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          find scripts -type f -name "*.sh" -print0 | xargs -0 shellcheck -e SC1090,SC1091,SC2034,SC2046,SC2086,SC2155
+
+      - name: Trivy Config Scan
+        uses: &trivy_action aquasecurity/trivy-action@0.34.0
+        with:
+          scan-type: config
+          scan-ref: .
+          hide-progress: false
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+
+  build-and-publish:
+    if: github.event_name != 'pull_request'
+    needs: ci-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 3. Логінимося в Docker Hub, використовуючи наші секрети
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 4. Збираємо образ і відправляємо його (Push)
+      - name: Build image for security scan (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          push: false
+          build-args: |
+            KOHA_VERSION=${{ env.KOHA_VERSION }}
+          tags: local/koha-scan:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy Image Scan (pre-push gate)
+        uses: *trivy_action
+        with:
+          image-ref: local/koha-scan:${{ github.sha }}
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
       - name: Build and push Docker image
+        id: push_image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -87,27 +105,34 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ env.KOHA_VERSION }}
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
-          # Використовуємо кеш GitHub Actions, щоб наступні збірки були у 2-3 рази швидшими
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # 5. Автоматичне оновлення опису на Docker Hub
       - name: Update Docker Hub Description
+        continue-on-error: true
         uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ env.IMAGE_NAME }} 
+          repository: ${{ env.IMAGE_NAME }}
           readme-filepath: ./README.md
 
-      # ==========================================
-      # НОВИЙ БЛОК: 6. Trivy Image Scan (Post-build Security)
-      # ==========================================
-      - name: 🛡️ Trivy Image Scan (Critical gate for CVEs)
-        uses: aquasecurity/trivy-action@0.28.0
+      - name: Generate SBOM (SPDX JSON)
+        uses: anchore/sbom-action@v0
         with:
-          image-ref: ${{ env.IMAGE_NAME }}:sha-${{ github.sha }} # Скануємо щойно зібраний образ за його унікальним SHA
-          format: 'table'
-          severity: 'CRITICAL'
-          exit-code: '1' # Фейлить пайплайн, якщо в системних пакетах є CRITICAL вразливості
-          ignore-unfixed: true # Ігнорує вразливості, для яких ще немає патча від розробників Debian/Ubuntu
+          image: ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          format: spdx-json
+          output-file: sbom-${{ github.sha }}.spdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom-${{ github.sha }}.spdx.json
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push_image.outputs.digest }}
+          push-to-registry: true
