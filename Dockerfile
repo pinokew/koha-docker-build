@@ -1,14 +1,15 @@
 FROM debian:bookworm
 
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG KOHA_VERSION=25.05
 ARG TARGETARCH
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 LABEL org.opencontainers.image.source=https://github.com/teorgamm/koha-docker
 
 RUN apt-get  update \
-    && apt-get install -y \
+    && apt-get install -y --no-install-recommends \
             wget \
             apache2 \
             gnupg2 \
@@ -20,19 +21,19 @@ RUN apt-get  update \
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp
 RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz
 
-RUN echo ${TARGETARCH} && case ${TARGETARCH} in \
+RUN echo "${TARGETARCH}" && case "${TARGETARCH}" in \
             "amd64")  S6_ARCH=x86_64  ;; \
             "arm64")  S6_ARCH=aarch64  ;; \
             "arm")  S6_ARCH=armhf ;; \
         esac \
-    && wget -P /tmp/ -q https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz \
-    && tar -C / -Jxpf /tmp/s6-overlay-${S6_ARCH}.tar.xz
+    && wget -P /tmp/ -q "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" \
+    && tar -C / -Jxpf "/tmp/s6-overlay-${S6_ARCH}.tar.xz"
 
 RUN mkdir -p /etc/apt/keyrings/ && \
     wget -qO - https://debian.koha-community.org/koha/gpg.asc | gpg --dearmor -o /etc/apt/keyrings/koha.gpg && \
     echo "deb [signed-by=/etc/apt/keyrings/koha.gpg] https://debian.koha-community.org/koha ${KOHA_VERSION}  main" | tee /etc/apt/sources.list.d/koha.list
 # Встановлюємо локалі, необхідні для Koha (en + uk)
-RUN apt-get update && apt-get install -y locales && \
+RUN apt-get update && apt-get install -y --no-install-recommends locales && \
     echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen && \
     echo "uk_UA.UTF-8 UTF-8" >> /etc/locale.gen && \
     locale-gen && \
@@ -83,7 +84,7 @@ RUN a2enmod proxy proxy_http headers && \
 RUN ln -sf ../sites-available/library.conf /etc/apache2/sites-enabled/library.conf
 
 # Виправляємо CRLF у конфігах s6-overlay
-RUN apt-get update && apt-get install -y dos2unix && \
+RUN apt-get update && apt-get install -y --no-install-recommends dos2unix && \
     { find /etc/s6-overlay -type f -print0 | xargs -0 dos2unix; } && \
     apt-get purge -y dos2unix && rm -rf /var/lib/apt/lists/*
 
