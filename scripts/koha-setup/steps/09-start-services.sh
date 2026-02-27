@@ -7,10 +7,25 @@ source "${SCRIPT_DIR}/../lib/koha-setup-common.sh"
 
 init_koha_setup_env
 
-a2enmod proxy proxy_http headers rewrite cgi || true
+a2enmod proxy proxy_http headers rewrite cgi cgid || true
 a2dismod mpm_itk || true
 echo "ServerName localhost" > /etc/apache2/conf-available/fqdn.conf
 a2enconf fqdn || true
+
+run_with_warning() {
+  local label="$1"
+  shift
+  local rc=0
+
+  set +e
+  "$@"
+  rc=$?
+  set -e
+
+  if [ "${rc}" -ne 0 ]; then
+    echo "WARNING: ${label} failed with exit ${rc}: $*"
+  fi
+}
 
 if [ -f /etc/koha/plack.psgi ]; then
   sed -i "s|__KOHA_CONF_DIR__|/etc/koha|g" /etc/koha/plack.psgi
@@ -21,14 +36,14 @@ rm -f "/var/run/koha/${KOHA_INSTANCE}/plack.pid"
 rm -f "/var/run/koha/${KOHA_INSTANCE}/plack.sock"
 
 echo "Starting koha-plack..."
-koha-plack --enable "${KOHA_INSTANCE}" || true
-koha-plack --start "${KOHA_INSTANCE}" || true
+run_with_warning "koha-plack enable" koha-plack --enable "${KOHA_INSTANCE}"
+run_with_warning "koha-plack start" koha-plack --start "${KOHA_INSTANCE}"
 
-koha-worker --start "${KOHA_INSTANCE}" || true
-koha-worker --start --queue long_tasks "${KOHA_INSTANCE}" || true
+run_with_warning "koha-worker start" koha-worker --start "${KOHA_INSTANCE}"
+run_with_warning "koha-worker long_tasks start" koha-worker --start --queue long_tasks "${KOHA_INSTANCE}"
 
 if [ "${USE_ELASTICSEARCH}" = "true" ]; then
   if koha-mysql "${KOHA_INSTANCE}" -e "SHOW TABLES LIKE 'systempreferences';" | grep -q systempreferences; then
-    /usr/sbin/koha-es-indexer --start "${KOHA_INSTANCE}" || true
+    run_with_warning "koha-es-indexer start" /usr/sbin/koha-es-indexer --start "${KOHA_INSTANCE}"
   fi
 fi

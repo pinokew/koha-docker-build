@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STEPS_DIR="${KOHA_SETUP_STEPS_DIR:-${SCRIPT_DIR}/steps}"
 STEP_GLOB="${KOHA_SETUP_STEP_GLOB:-[0-9][0-9]-*.sh}"
 FAIL_FAST="${KOHA_SETUP_FAIL_FAST:-false}"
-REQUIRED_STEPS="${KOHA_SETUP_REQUIRED_STEPS:-00-env-checks.sh}"
+REQUIRED_STEPS="${KOHA_SETUP_REQUIRED_STEPS:-00-env-checks.sh 06-koha-create.sh}"
 SKIP_STEPS="${KOHA_SETUP_SKIP_STEPS:-}"
 ONLY_STEPS="${KOHA_SETUP_ONLY_STEPS:-}"
 
@@ -49,6 +49,11 @@ step_mode_for() {
     echo "optional"
   fi
 }
+
+# koha-create is mandatory for healthy first startup in clean volumes.
+if ! is_in_word_list "06-koha-create.sh" "${REQUIRED_STEPS}"; then
+  REQUIRED_STEPS="${REQUIRED_STEPS} 06-koha-create.sh"
+fi
 
 should_run_step() {
   local step_name="$1"
@@ -102,6 +107,19 @@ run_step() {
   return 0
 }
 
+validate_required_artifacts() {
+  local koha_instance="${KOHA_INSTANCE:-library}"
+  local koha_conf="${KOHA_CONF:-/etc/koha/sites/${koha_instance}/koha-conf.xml}"
+
+  if [ ! -s "${koha_conf}" ]; then
+    echo "[setup] FAIL: required Koha config missing: ${koha_conf}"
+    FAILED_REQUIRED_STEPS+=("koha-conf.xml missing (${koha_conf})")
+    return 1
+  fi
+
+  return 0
+}
+
 if [ ! -d "${STEPS_DIR}" ]; then
   echo "[setup] FAIL: steps directory does not exist: ${STEPS_DIR}"
   exit 1
@@ -116,13 +134,18 @@ fi
 
 for step_path in "${STEP_FILES[@]}"; do
   step_name="$(basename "${step_path}")"
+  mode="$(step_mode_for "${step_name}")"
 
   if ! should_run_step "${step_name}"; then
+    if [ "${mode}" = "required" ]; then
+      echo "[setup] FAIL: required step was skipped by filters: ${step_name}"
+      FAILED_REQUIRED_STEPS+=("${step_name} (skipped by filter)")
+      break
+    fi
     echo "[setup] SKIP: ${step_name}"
     continue
   fi
 
-  mode="$(step_mode_for "${step_name}")"
   if ! run_step "${mode}" "${step_path}"; then
     if [ "${mode}" = "required" ]; then
       echo "[setup] Required step failed, stopping on ${step_name}."
@@ -134,6 +157,8 @@ for step_path in "${STEP_FILES[@]}"; do
     fi
   fi
 done
+
+validate_required_artifacts || true
 
 if [ "${#FAILED_REQUIRED_STEPS[@]}" -gt 0 ]; then
   echo "[setup] Completed with required step failures:"
