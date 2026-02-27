@@ -12,7 +12,7 @@ if [ -x /usr/sbin/koha-create ]; then
   sed -i "s/grep -q 'cgi_module'/grep -Eq 'cgi_module|cgid_module'/" /usr/sbin/koha-create || true
 
   # The setup pipeline may pre-create the instance user; make adduser idempotent.
-  sed -i 's/--quiet "\$username"/--quiet "\$username" || true/' /usr/sbin/koha-create || true
+  sed -i "s/--quiet \"\\\$username\"/--quiet \"\\\$username\" || true/" /usr/sbin/koha-create || true
 
   # In pinokew image Apache restart may fail before AssignUserID cleanup step.
   sed -i 's/service apache2 restart/service apache2 restart || true/' /usr/sbin/koha-create || true
