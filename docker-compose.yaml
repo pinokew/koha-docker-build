@@ -1,16 +1,12 @@
 services:
   koha:
     container_name: koha-app
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        # Передаємо лише номер версії (напр., 25.05) у Dockerfile
-        KOHA_VERSION: ${KOHA_IMAGE_TAG}
     image: ${KOHA_IMAGE_NAME}:${KOHA_IMAGE_TAG}
     ports:
-      - "8080:8080" # OPAC
-      - "8081:8081" # Staff
+      # Поки що відкриваємо порти на хост для тестування. 
+      # Пізніше (у Фазі 3) ми їх сховаємо за Traefik/Cloudflare Tunnel.
+      - "${KOHA_OPAC_PORT:-8080}:8080" # OPAC
+      - "${KOHA_INTRANET_PORT:-8081}:8081" # Staff
     networks:
       - kohanet
     cap_add:
@@ -30,6 +26,15 @@ services:
       # --- Koha ---
       KOHA_INSTANCE: ${KOHA_INSTANCE}
       KOHA_DOMAIN: ${KOHA_DOMAIN}
+      KOHA_CONF: /etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml
+      KOHA_OPAC_PORT: ${KOHA_OPAC_PORT}
+      KOHA_INTRANET_PORT: ${KOHA_INTRANET_PORT}
+      KOHA_OPAC_PREFIX: ${KOHA_OPAC_PREFIX}
+      KOHA_OPAC_SUFFIX: ${KOHA_OPAC_SUFFIX}
+      KOHA_INTRANET_PREFIX: ${KOHA_INTRANET_PREFIX}
+      KOHA_INTRANET_SUFFIX: ${KOHA_INTRANET_SUFFIX}
+      KOHA_OPAC_SERVERNAME: ${KOHA_OPAC_SERVERNAME:-}
+      KOHA_INTRANET_SERVERNAME: ${KOHA_INTRANET_SERVERNAME:-}
       MEMCACHED_SERVERS: memcached:11211
       USE_ELASTICSEARCH: "true"
       ELASTICSEARCH_HOST: es:9200
@@ -44,10 +49,6 @@ services:
       MB_USER: ${RABBITMQ_USER}
       MB_PASS: ${RABBITMQ_PASS}
 
-      # KOHA_CONF я б не задавав тут вручну — нехай імідж/koha-shell сам керує
-      # Якщо дуже треба, то краще глобальний:
-      # KOHA_CONF: /etc/koha/koha-conf.xml
-
       # root-пароль БД Koha сама напряму не використовує, але можна лишити,
       # якщо твій entrypoint його читає
       DB_ROOT_PASS: ${DB_ROOT_PASS}
@@ -56,7 +57,7 @@ services:
       db:
         condition: service_healthy
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
       memcached:
         condition: service_started
       es:
@@ -64,8 +65,11 @@ services:
     restart: always
     volumes:
       - ${VOL_KOHA_CONF}:/etc/koha/sites
+      - ${VOL_KOHA_CONF}/${KOHA_INSTANCE}:/etc/koha/sites/default
       - ${VOL_KOHA_DATA}:/var/lib/koha
       - ${VOL_KOHA_LOGS}:/var/log/koha
+      - ./docker/pinokew/ports.conf:/etc/apache2/ports.conf:ro
+      - ./scripts/koha-setup:/etc/s6-overlay/scripts:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8081 || exit 1"]
       interval: 30s
@@ -75,21 +79,27 @@ services:
 
   rabbitmq:
     container_name: koha-rabbitmq
-    build: ./rabbitmq  
-    image: koha-local-rabbitmq 
+    image: ${RABBITMQ_IMAGE_NAME}:${RABBITMQ_IMAGE_TAG}
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
     networks:
       - kohanet
     restart: always
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   db:
     container_name: koha-db
-    image: docker.io/mariadb:11
+    image: ${MARIADB_IMAGE_NAME}:${MARIADB_IMAGE_TAG}
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
+      # Якщо потрібно, можна розкоментувати ліміти з'єднань
+      # - --max_connections=500
     volumes:
       - ${VOL_DB_PATH}:/var/lib/mysql
     environment:
@@ -102,7 +112,6 @@ services:
       - kohanet
     restart: always
     healthcheck:
-      # Використовуємо змінні середовища всередині контейнера MariaDB
       test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u$$MARIADB_USER -p$$MARIADB_PASSWORD || exit 1"]
       interval: 10s
       timeout: 5s
@@ -111,10 +120,7 @@ services:
 
   es:
     container_name: koha-es
-    build:
-      context: .
-      dockerfile: elasticsearch/Dockerfile
-    image: my-local-es:8.19.6
+    image: ${ES_IMAGE_NAME}:${ES_IMAGE_TAG}
     environment:
       - "discovery.type=single-node"
       - "xpack.security.enabled=false"
@@ -134,14 +140,14 @@ services:
 
   memcached:
     container_name: koha-memcached   
-    image: docker.io/memcached
+    image: ${MEMCACHED_IMAGE_NAME}:${MEMCACHED_IMAGE_TAG}
     networks:
       - kohanet
     restart: always
   
   tunnel:
-    image: cloudflare/cloudflared:latest
     container_name: koha_tunnel
+    image: ${CLOUDFLARED_IMAGE_NAME}:${CLOUDFLARED_IMAGE_TAG}
     restart: always
     networks:
       - kohanet

@@ -16,6 +16,21 @@ init_koha_setup_env() {
   : "${KOHA_INSTANCE:=library}"
   export KOHA_INSTANCE
   export KOHA_USER="${KOHA_INSTANCE}-koha"
+  : "${KOHA_DOMAIN:=myDNSname.org}"
+  : "${KOHA_CONF:=/etc/koha/sites/${KOHA_INSTANCE}/koha-conf.xml}"
+  : "${KOHA_OPAC_PORT:=8080}"
+  : "${KOHA_INTRANET_PORT:=8081}"
+  : "${KOHA_OPAC_PREFIX:=}"
+  : "${KOHA_OPAC_SUFFIX:=}"
+  : "${KOHA_INTRANET_PREFIX:=}"
+  : "${KOHA_INTRANET_SUFFIX:=-intra}"
+  : "${KOHA_OPAC_SERVERNAME:=}"
+  : "${KOHA_INTRANET_SERVERNAME:=}"
+  export KOHA_DOMAIN KOHA_CONF
+  export KOHA_OPAC_PORT KOHA_INTRANET_PORT
+  export KOHA_OPAC_PREFIX KOHA_OPAC_SUFFIX
+  export KOHA_INTRANET_PREFIX KOHA_INTRANET_SUFFIX
+  export KOHA_OPAC_SERVERNAME KOHA_INTRANET_SERVERNAME
 
   : "${TZ:=${KOHA_TIMEZONE:-Europe/Kyiv}}"
   export TZ

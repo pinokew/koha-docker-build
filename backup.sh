@@ -16,6 +16,7 @@ fi
 BACKUP_ROOT="${BACKUP_PATH:-./backups}"
 TS="$(date +'%Y-%m-%d_%H-%M-%S')"
 BACKUP_DIR="$BACKUP_ROOT/$TS"
+DB_CONTAINER_NAME="${DB_CONTAINER_NAME:-koha-db}"
 
 # Отримуємо ID твого користувача, щоб потім передати права
 USER_ID=$(id -u)
@@ -31,11 +32,39 @@ VOL_ES=${VOL_ES_PATH}
 echo "📂 Бекапи будуть збережені в: $BACKUP_DIR"
 mkdir -p "$BACKUP_DIR"
 
+# === Перевірка/запуск DB сервісу ===
+echo "🔎 Перевіряю стан контейнера БД: $DB_CONTAINER_NAME..."
+if docker container inspect "$DB_CONTAINER_NAME" >/dev/null 2>&1; then
+    DB_STATUS="$(docker inspect -f '{{.State.Status}}' "$DB_CONTAINER_NAME")"
+    if [ "$DB_STATUS" != "running" ]; then
+        echo "ℹ️ Контейнер $DB_CONTAINER_NAME зупинений. Запускаю: docker start $DB_CONTAINER_NAME"
+        docker start "$DB_CONTAINER_NAME" >/dev/null
+    fi
+else
+    echo "ℹ️ Контейнер $DB_CONTAINER_NAME не знайдено. Спробую створити через docker compose up -d db"
+    docker compose up -d db
+fi
+
+echo "⏳ Очікую готовність бази даних..."
+db_ready=0
+for _ in $(seq 1 30); do
+    if docker exec "$DB_CONTAINER_NAME" sh -c "mariadb -u\"${DB_USER}\" -p\"${DB_PASS}\" \"${DB_NAME}\" -e 'SELECT 1' >/dev/null 2>&1"; then
+        db_ready=1
+        break
+    fi
+    sleep 2
+done
+
+if [ "$db_ready" -ne 1 ]; then
+    echo "❌ Сервіс db не став доступним. Перевір логи: docker compose logs --tail=100 db"
+    exit 1
+fi
+
 # === 1. Дамп бази даних Koha (MariaDB) ===
 echo "💾 [1/5] Створюю SQL-дамп бази даних ${DB_NAME}..."
 
 # Використовуємо mariadb-dump (або mysqldump як запасний варіант)
-docker compose exec -T db sh -c "if command -v mariadb-dump > /dev/null; then mariadb-dump --single-transaction --quick -u\"${DB_USER}\" -p\"${DB_PASS}\" \"${DB_NAME}\"; else mysqldump --single-transaction --quick -u\"${DB_USER}\" -p\"${DB_PASS}\" \"${DB_NAME}\"; fi" > "$BACKUP_DIR/${DB_NAME}.sql"
+docker exec -i "$DB_CONTAINER_NAME" sh -c "if command -v mariadb-dump > /dev/null; then mariadb-dump --single-transaction --quick -u\"${DB_USER}\" -p\"${DB_PASS}\" \"${DB_NAME}\"; else mysqldump --single-transaction --quick -u\"${DB_USER}\" -p\"${DB_PASS}\" \"${DB_NAME}\"; fi" > "$BACKUP_DIR/${DB_NAME}.sql"
 
 if [ -s "$BACKUP_DIR/${DB_NAME}.sql" ]; then
     echo "✅ Дамп БД успішно збережено."
