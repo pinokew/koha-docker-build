@@ -175,3 +175,45 @@
 2. Скрипти читають тільки ENV-змінні, дефолти допускаються лише як безпечний fallback.
 3. Жодного environment-specific хардкоду в скриптах і Dockerfile.
 4. У changelog фіксуються нові/змінені ENV-ключі та їх вплив.
+
+## 9) Оновлення 2026-02-28: підтверджено запуск у deploy-репо
+
+Підтверджено, що образ `pinokew/koha:25.05` стартує коректно в окремому deploy-репо без ручних hotfix усередині контейнера.
+
+### 9.1. Що змінено для стабільного clean-start
+
+1. `scripts/koha-setup/00-runner.sh`
+- `06-koha-create.sh` зроблено required-кроком за замовчуванням.
+- Додано fail, якщо required-кроки відфільтровані через `SKIP/ONLY`.
+- Додано фінальну перевірку артефакту: `KOHA_CONF` (`/etc/koha/sites/<instance>/koha-conf.xml`) має існувати.
+
+2. `scripts/koha-setup/steps/06-koha-create.sh`
+- Додано preflight `apachectl -t` перед `koha-create`.
+- Після успішного `koha-create` оновлюється `/etc/koha-envvars/INSTANCE_NAME`.
+- Після успішного `koha-create` оновлюється `/etc/koha-envvars/KOHA_CONF`.
+- Якщо `koha-conf.xml` не створено, startup завершується з помилкою.
+
+3. `scripts/koha-setup/steps/08-apache-config.sh`
+- `ports.conf` тепер нормалізується через `printf` з реальними переносами рядків.
+- Порти беруться з env: `KOHA_OPAC_PORT`, `KOHA_INTRANET_PORT`.
+- `AssignUserID` видаляється з instance vhost-конфігів.
+- Обидва `<VirtualHost *>` примусово оновлюються під env-порти.
+
+4. `scripts/koha-setup/steps/09-start-services.sh`
+- Увімкнення модулів Apache: `cgi` + `cgid`.
+- Запуски `koha-plack`/`koha-worker`/`koha-es-indexer` логують warning з кодом помилки (без silent-ignore).
+
+5. `docker-compose.yaml` і `docker-compose.deploy.yaml`
+- Переключено порт-мапінг на env->env (host/container): `${KOHA_OPAC_PORT}:${KOHA_OPAC_PORT}`, `${KOHA_INTRANET_PORT}:${KOHA_INTRANET_PORT}`.
+- Healthcheck Koha використовує `KOHA_INTRANET_PORT` з env.
+- Прибрано read-only mount `ports.conf` у build-compose, щоб runtime-скрипт міг коректно генерувати `ports.conf`.
+
+### 9.2. Факт валідації
+
+1. Образ успішно запущений у deploy-репо.
+2. Підтверджено роботу при портах:
+- `KOHA_INTRANET_PORT=8081`
+- `KOHA_OPAC_PORT=8082`
+3. Симптоми з попередніх релізів не відтворюються:
+- `Port must be specified`
+- `unable to locate Koha configuration file`

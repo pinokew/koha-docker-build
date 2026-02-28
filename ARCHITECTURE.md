@@ -26,8 +26,7 @@ koha-docker-build/
   files/                          # runtime-файли, що копіюються в image
   scripts/koha-setup/             # setup pipeline всередині контейнера
   docker/pinokew/ports.conf       # сумісний apache ports fix
-  docker-compose.yaml             # локальний інтеграційний smoke-стенд
-  .env.example                    # мінімальний env для build/smoke
+   .env.example                    # мінімальний env для build/smoke
   README.md
   CHANGELOG.md
 ```
