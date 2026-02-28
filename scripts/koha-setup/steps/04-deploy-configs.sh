@@ -22,6 +22,24 @@ for required_file in \
   fi
 done
 
+set_koha_sites_conf_value() {
+  local key="$1"
+  local value="$2"
+  local conf="/etc/koha/koha-sites.conf"
+
+  if grep -qE "^[[:space:]]*${key}=" "${conf}"; then
+    sed -i "s|^[[:space:]]*${key}=.*|${key}=\"${value}\"|g" "${conf}"
+  else
+    printf "%s=\"%s\"\n" "${key}" "${value}" >> "${conf}"
+  fi
+}
+
+# Keep koha-sites.conf aligned with runtime ENV (SSOT), so koha-create
+# renders koha-conf.xml with the intended memcached endpoint.
+set_koha_sites_conf_value "USE_MEMCACHED" "${USE_MEMCACHED}"
+set_koha_sites_conf_value "MEMCACHED_SERVERS" "${MEMCACHED_SERVERS}"
+echo "[configs] Синхронізовано koha-sites.conf: USE_MEMCACHED=${USE_MEMCACHED}, MEMCACHED_SERVERS=${MEMCACHED_SERVERS}"
+
 # Генеруємо koha-common.cnf тільки з env змінних контейнера
 cat >/etc/mysql/koha-common.cnf <<CFG
 [client]

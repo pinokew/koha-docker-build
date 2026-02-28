@@ -37,7 +37,10 @@ init_koha_setup_env() {
 
   : "${USE_ELASTICSEARCH:=false}"
   : "${ELASTICSEARCH_HOST:=elasticsearch}"
+  : "${USE_MEMCACHED:=yes}"
+  : "${MEMCACHED_SERVERS:=memcached:11211}"
   export USE_ELASTICSEARCH ELASTICSEARCH_HOST
+  export USE_MEMCACHED MEMCACHED_SERVERS
 }
 
 require_db_env() {
