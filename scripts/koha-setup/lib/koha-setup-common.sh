@@ -52,7 +52,7 @@ require_db_env() {
 
 source_koha_functions_if_present() {
   if [ -f /usr/share/koha/bin/koha-functions.sh ]; then
-    # shellcheck source=/usr/share/koha/bin/koha-functions.sh
+    # shellcheck disable=SC1091
     source /usr/share/koha/bin/koha-functions.sh
     return 0
   fi
