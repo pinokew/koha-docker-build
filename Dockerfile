@@ -8,9 +8,9 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 LABEL org.opencontainers.image.source=https://github.com/teorgamm/koha-docker
 
-# hadolint ignore=DL3008
+# hadolint ignore=DL3008,DL3015
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+    && apt-get install -y \
             wget \
             ca-certificates \
             apache2 \
@@ -36,17 +36,18 @@ RUN mkdir -p /etc/apt/keyrings/ && \
     wget -qO - https://debian.koha-community.org/koha/gpg.asc | gpg --dearmor -o /etc/apt/keyrings/koha.gpg && \
     echo "deb [signed-by=/etc/apt/keyrings/koha.gpg] https://debian.koha-community.org/koha ${KOHA_VERSION}  main" | tee /etc/apt/sources.list.d/koha.list
 # Встановлюємо локалі, необхідні для Koha (en + uk)
-# hadolint ignore=DL3008
-RUN apt-get update && apt-get install -y --no-install-recommends locales && \
+# hadolint ignore=DL3008,DL3015
+RUN apt-get update && apt-get install -y locales && \
     echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen && \
     echo "uk_UA.UTF-8 UTF-8" >> /etc/locale.gen && \
     locale-gen && \
     apt-get purge -y --auto-remove -y locales && \
     rm -rf /var/lib/apt/lists/*
 # Install Koha
-# hadolint ignore=DL3008
+# hadolint ignore=DL3008,DL3015
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends koha-core \
+    && apt-get install -y koha-core \
+       libauthen-sasl-perl \
        idzebra-2.0 \
        apache2 \
        logrotate \
@@ -90,8 +91,8 @@ RUN a2enmod proxy proxy_http headers && \
 RUN ln -sf ../sites-available/library.conf /etc/apache2/sites-enabled/library.conf
 
 # Виправляємо CRLF у конфігах s6-overlay
-# hadolint ignore=DL3008
-RUN apt-get update && apt-get install -y --no-install-recommends dos2unix && \
+# hadolint ignore=DL3008,DL3015
+RUN apt-get update && apt-get install -y dos2unix && \
     { find /etc/s6-overlay -type f -print0 | xargs -0 dos2unix; } && \
     apt-get purge -y dos2unix && rm -rf /var/lib/apt/lists/*
 

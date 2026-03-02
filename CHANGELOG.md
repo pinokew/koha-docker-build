@@ -217,3 +217,69 @@
 3. Симптоми з попередніх релізів не відтворюються:
 - `Port must be specified`
 - `unable to locate Koha configuration file`
+
+## 10) Оновлення 2026-03-02: CI hardening і стабілізація build-репо
+
+### 10.1. Workflow `build-and-push` приведено до запуску утиліт через Docker Hub
+
+1. Усі перевірки в `ci-checks` запускаються контейнерами з Docker Hub (`docker run`).
+2. Image references інструментів винесені в `env`:
+- `HADOLINT_IMAGE`
+- `SHELLCHECK_IMAGE`
+- `GITLEAKS_IMAGE`
+- `TRIVY_IMAGE`
+3. Для `actions/checkout` прибрано дублювання через YAML anchor/alias.
+
+Файл:
+- `.github/workflows/build-and-push.yml`
+
+### 10.2. Стабілізовано security/lint кроки CI
+
+1. `Gitleaks`:
+- якщо `.gitleaks.toml` існує, використовується кастомний конфіг;
+- якщо файлу немає, перевірка йде на вбудованому профілі (без падіння через `no such file or directory`).
+
+2. `Shellcheck`:
+- у runtime-скриптах додано точкові `SC1091` disable для `source`-шляхів, які не існують у CI filesystem layout;
+- перевірка проходить з флагом `-x`.
+
+3. `Hadolint`:
+- виправлено попередження по `echo`/escape (`printf`),
+- додані точкові ignore для правил, непридатних до цього Dockerfile-контексту.
+
+4. `Trivy config`:
+- додано `.trivyignore` з точковим ignore `DS-0002` (root runtime для `s6` bootstrap);
+- у workflow явно задано `--ignorefile /work/.trivyignore`.
+
+Файли:
+- `.github/workflows/build-and-push.yml`
+- `.trivyignore`
+- `scripts/koha-setup/lib/koha-setup-common.sh`
+- `scripts/koha-setup/steps/*.sh`
+- `Dockerfile`
+
+### 10.3. Оновлено локальні policy-скрипти під поточний стан репозиторію
+
+1. `check-secrets-hygiene.sh`:
+- прибрано legacy-перевірки неіснуючих контекстів (`rabbitmq/elasticsearch/memcached`);
+- додано перевірки актуальних build-context з workflow;
+- посилено контроль `.env`/ключів і `.dockerignore/.gitignore`.
+
+2. `check-internal-ports-policy.sh`:
+- додано режим без compose-файлу;
+- перевіряються портові контракти через `Dockerfile EXPOSE`, `docker/pinokew/ports.conf` і `files/etc/apache2/sites-available/library.conf`.
+
+Файли:
+- `scripts/check-secrets-hygiene.sh`
+- `scripts/check-internal-ports-policy.sh`
+
+### 10.4. SMTP runtime dependency для MS365 AUTH
+
+1. До складу образу додано Perl-залежність:
+- `libauthen-sasl-perl`
+
+2. Для поточного запиту прибрано `--no-install-recommends` з усіх `apt-get install` у Dockerfile.
+3. Щоб CI не падав після цього на `DL3015`, додано точкові `hadolint ignore=DL3015`.
+
+Файл:
+- `Dockerfile`
