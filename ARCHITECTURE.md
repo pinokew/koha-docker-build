@@ -25,6 +25,8 @@ koha-docker-build/
   Dockerfile
   files/                          # runtime-файли, що копіюються в image
   scripts/koha-setup/             # setup pipeline всередині контейнера
+  scripts/check-internal-ports-policy.sh # перевірка портів
+  scripts/check-secrets-hygiene.sh       # перевірка гігієни секретів
   docker/pinokew/ports.conf       # сумісний apache ports fix
    .env.example                    # мінімальний env для build/smoke
   README.md

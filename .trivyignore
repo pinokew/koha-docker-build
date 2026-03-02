@@ -1,0 +1,4 @@
+# The image uses s6-overlay (/init) and runtime bootstrap steps that need root
+# privileges (user management, ownership fixes, Apache/Koha init scripts).
+# Until runtime is redesigned for rootless startup, ignore this check.
+DS-0002
