@@ -20,8 +20,8 @@ env:
   IMAGE_NAME: pinokew/koha
   KOHA_VERSION: "25.05"
   LOCAL_SCAN_IMAGE: local/koha-scan:${{ github.sha }}
-  HADOLINT_IMAGE: hadolint/hadolint:v2.13.1-alpine
-  SHELLCHECK_IMAGE: koalaman/shellcheck:v0.10.0
+  HADOLINT_IMAGE: hadolint/hadolint@sha256:84c2f9088a8cb0ea2bd16b5349186770d16441e77eec1a1d1e0574cf7dff47ac
+  SHELLCHECK_IMAGE: koalaman/shellcheck@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
   GITLEAKS_IMAGE: zricethezav/gitleaks@sha256:691af3c7c5a48b16f187ce3446d5f194838f91238f27270ed36eef6359a574d9
   TRIVY_IMAGE: aquasec/trivy@sha256:3d1f862cb6c4fe13c1506f96f816096030d8d5ccdb2380a3069f7bf07daa86aa
 
@@ -41,7 +41,13 @@ jobs:
       - name: Gitleaks
         run: |
           set -euo pipefail
-          docker run --rm -v "$PWD:/work" -w /work "${GITLEAKS_IMAGE}" detect --source /work --config /work/.gitleaks.toml --no-banner --redact --exit-code 1
+          args=(detect --source /work --no-banner --redact --exit-code 1)
+          if [ -f "$PWD/.gitleaks.toml" ]; then
+            args+=(--config /work/.gitleaks.toml)
+          else
+            echo "No .gitleaks.toml found, running with built-in Gitleaks config"
+          fi
+          docker run --rm -v "$PWD:/work" -w /work "${GITLEAKS_IMAGE}" "${args[@]}"
 
       - name: Hadolint
         run: |
