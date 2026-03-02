@@ -1,77 +1,121 @@
-name: Build and Push Koha Image
+name: build-and-push
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - 'docs/**'
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - 'docs/**'
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: koha-image-${{ github.ref }}
+  group: build-and-push-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   IMAGE_NAME: pinokew/koha
   KOHA_VERSION: "25.05"
+  LOCAL_SCAN_IMAGE: local/koha-scan:${{ github.sha }}
+  HADOLINT_IMAGE: hadolint/hadolint:v2.13.1-alpine
+  SHELLCHECK_IMAGE: koalaman/shellcheck:v0.10.0
+  GITLEAKS_IMAGE: zricethezav/gitleaks@sha256:691af3c7c5a48b16f187ce3446d5f194838f91238f27270ed36eef6359a574d9
+  TRIVY_IMAGE: aquasec/trivy@sha256:3d1f862cb6c4fe13c1506f96f816096030d8d5ccdb2380a3069f7bf07daa86aa
 
 jobs:
   ci-checks:
+    name: ci-checks
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
+    timeout-minutes: 15
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - &checkout_step
+        name: Checkout
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
         with:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Run Hadolint (Dockerfile lint gate)
+      - name: Gitleaks
         run: |
-          docker run --rm -i hadolint/hadolint:v2.13.1-alpine hadolint --failure-threshold error - < Dockerfile
+          set -euo pipefail
+          docker run --rm -v "$PWD:/work" -w /work "${GITLEAKS_IMAGE}" detect --source /work --config /work/.gitleaks.toml --no-banner --redact --exit-code 1
 
-      - name: Run Shellcheck (gate)
+      - name: Hadolint
         run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
-          find scripts -type f -name "*.sh" -print0 | xargs -0 shellcheck -e SC1090,SC1091,SC2034,SC2046,SC2086,SC2155
+          set -euo pipefail
+          mapfile -t files < <(find . -type f -name 'Dockerfile' | sort)
+          [ "${#files[@]}" -gt 0 ] || { echo "No Dockerfiles found"; exit 1; }
+          docker run --rm -v "$PWD:/work" -w /work "${HADOLINT_IMAGE}" hadolint "${files[@]}"
 
-      - name: Trivy Config Scan
-        uses: &trivy_action aquasecurity/trivy-action@0.34.0
-        with:
-          scan-type: config
-          scan-ref: .
-          hide-progress: false
-          format: table
-          severity: CRITICAL
-          exit-code: '1'
+      - name: Shellcheck
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find scripts -type f -name '*.sh' | sort)
+          [ "${#files[@]}" -gt 0 ] || { echo "No shell scripts found under scripts/"; exit 1; }
+          docker run --rm -v "$PWD:/work" -w /work "${SHELLCHECK_IMAGE}" -x "${files[@]}"
+
+      - name: Local secrets hygiene checks
+        run: bash ./scripts/check-secrets-hygiene.sh
+
+      - name: Internal ports policy check
+        run: bash ./scripts/check-internal-ports-policy.sh
+
+      - name: Trivy config
+        id: trivy_config
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          log_file="trivy-config.log"
+          set +e
+          docker run --rm -v "$PWD:/work" -w /work "${TRIVY_IMAGE}" config --skip-check-update --exit-code 1 --severity HIGH,CRITICAL /work 2>&1 | tee "${log_file}"
+          trivy_rc=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=${trivy_rc}" >> "${GITHUB_OUTPUT}"
+
+      - name: Trivy config log tail
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -f trivy-config.log ]; then
+            echo "----- trivy-config.log (tail -200) -----"
+            tail -n 200 trivy-config.log
+          else
+            echo "trivy-config.log not found"
+          fi
+
+      - name: Fail on Trivy config
+        if: steps.trivy_config.outputs.exit_code != '0'
+        run: |
+          echo "Trivy config failed with exit code ${{ steps.trivy_config.outputs.exit_code }}"
+          exit 1
 
   build-and-publish:
-    if: github.event_name != 'pull_request' && github.repository_owner == 'pinokew'
+    name: build-and-publish
     needs: ci-checks
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.repository_owner == 'pinokew'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write
       attestations: write
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          fetch-depth: 1
+      - *checkout_step
+
+      - name: Validate Docker Hub secrets
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "Missing GitHub secret: DOCKERHUB_USERNAME"
+            exit 1
+          fi
+          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "Missing GitHub secret: DOCKERHUB_TOKEN"
+            exit 1
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -82,7 +126,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build image for security scan (no push)
+      - name: Build image for Trivy scan (no push)
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -91,18 +135,21 @@ jobs:
           push: false
           build-args: |
             KOHA_VERSION=${{ env.KOHA_VERSION }}
-          tags: local/koha-scan:${{ github.sha }}
+          tags: ${{ env.LOCAL_SCAN_IMAGE }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Trivy Image Scan (pre-push gate)
-        uses: *trivy_action
-        with:
-          image-ref: local/koha-scan:${{ github.sha }}
-          format: table
-          severity: CRITICAL
-          exit-code: '1'
-          ignore-unfixed: true
+      - name: Trivy image
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            "${TRIVY_IMAGE}" image \
+            --skip-check-update \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --ignore-unfixed \
+            "${LOCAL_SCAN_IMAGE}"
 
       - name: Build and push Docker image
         id: push_image
@@ -120,7 +167,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Update Docker Hub Description
+      - name: Update Docker Hub description
         continue-on-error: true
         uses: peter-evans/dockerhub-description@v5
         with:
