@@ -8,7 +8,8 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 LABEL org.opencontainers.image.source=https://github.com/teorgamm/koha-docker
 
-RUN apt-get  update \
+# hadolint ignore=DL3008
+RUN apt-get update \
     && apt-get install -y --no-install-recommends \
             wget \
             ca-certificates \
@@ -35,6 +36,7 @@ RUN mkdir -p /etc/apt/keyrings/ && \
     wget -qO - https://debian.koha-community.org/koha/gpg.asc | gpg --dearmor -o /etc/apt/keyrings/koha.gpg && \
     echo "deb [signed-by=/etc/apt/keyrings/koha.gpg] https://debian.koha-community.org/koha ${KOHA_VERSION}  main" | tee /etc/apt/sources.list.d/koha.list
 # Встановлюємо локалі, необхідні для Koha (en + uk)
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends locales && \
     echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen && \
     echo "uk_UA.UTF-8 UTF-8" >> /etc/locale.gen && \
@@ -42,6 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends locales && \
     apt-get purge -y --auto-remove -y locales && \
     rm -rf /var/lib/apt/lists/*
 # Install Koha
+# hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends koha-core \
        idzebra-2.0 \
@@ -51,6 +54,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # KDV: виправляємо створення каталогу логів у koha-create (не падати, якщо вже існує)
+# hadolint ignore=SC2016
 RUN sed -i 's#mkdir "/var/log/koha/\$name"#mkdir -p "/var/log/koha/\$name" || true#' /usr/sbin/koha-create \
  && sed -i 's#chown "$username:$username" "/var/log/koha/\$name"#chown "$username:$username" "/var/log/koha/\$name" || true#' /usr/sbin/koha-create \
  && sed -i 's#chown $username:$username /var/log/koha/\$name/\*\.log#chown $username:$username /var/log/koha/\$name/*.log || true#' /usr/sbin/koha-create || true
@@ -61,7 +65,7 @@ RUN a2enmod rewrite \
     && a2enmod proxy_http \
     && a2enmod cgi \
     && a2dissite 000-default \
-    && echo "Listen 8081\nListen 8080" > /etc/apache2/ports.conf \
+    && printf "Listen 8081\nListen 8080\n" > /etc/apache2/ports.conf \
     && mkdir -p /var/log/koha/apache \
     && mkdir -p /var/log/koha/apache
 
@@ -86,6 +90,7 @@ RUN a2enmod proxy proxy_http headers && \
 RUN ln -sf ../sites-available/library.conf /etc/apache2/sites-enabled/library.conf
 
 # Виправляємо CRLF у конфігах s6-overlay
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends dos2unix && \
     { find /etc/s6-overlay -type f -print0 | xargs -0 dos2unix; } && \
     apt-get purge -y dos2unix && rm -rf /var/lib/apt/lists/*
