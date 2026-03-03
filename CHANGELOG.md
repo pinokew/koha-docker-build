@@ -283,3 +283,34 @@
 
 Файл:
 - `Dockerfile`
+
+### 10.5. Startup idempotency і Trivy image secret fix
+
+1. `koha-create` зроблено idempotent для restart/recreate:
+- у `06-koha-create.sh` додано early-exit, якщо `${KOHA_CONF}` вже існує і непорожній;
+- це прибирає перезапис live-конфігів (`koha-conf.xml`) на повторних стартах контейнера.
+
+2. Прибрано Trivy `secret` finding по snakeoil private key:
+- у `Dockerfile` після пакетних інсталяцій додано видалення:
+  - `/etc/ssl/private/ssl-cert-snakeoil.key`
+  - `/etc/ssl/certs/ssl-cert-snakeoil.pem`
+
+Файли:
+- `scripts/koha-setup/steps/06-koha-create.sh`
+- `Dockerfile`
+
+### 10.6. Trivy image: фікс падіння на завантаженні vulnerability DB
+
+1. Причина падіння:
+- `Trivy image` крок у CI падав при завантаженні DB з дефолтного `mirror.gcr.io` (`404 Not Found`).
+
+2. Зміна:
+- у workflow явно задано репозиторії БД для Trivy image scan:
+  - `TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2`
+  - `TRIVY_JAVA_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-java-db:1`
+- у команду `trivy image` додано:
+  - `--db-repository "${TRIVY_DB_REPOSITORY}"`
+  - `--java-db-repository "${TRIVY_JAVA_DB_REPOSITORY}"`
+
+Файл:
+- `.github/workflows/build-and-push.yml`

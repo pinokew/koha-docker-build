@@ -24,6 +24,8 @@ env:
   SHELLCHECK_IMAGE: koalaman/shellcheck@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
   GITLEAKS_IMAGE: zricethezav/gitleaks@sha256:691af3c7c5a48b16f187ce3446d5f194838f91238f27270ed36eef6359a574d9
   TRIVY_IMAGE: aquasec/trivy@sha256:3d1f862cb6c4fe13c1506f96f816096030d8d5ccdb2380a3069f7bf07daa86aa
+  TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
+  TRIVY_JAVA_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-java-db:1
 
 jobs:
   ci-checks:
@@ -151,6 +153,8 @@ jobs:
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             "${TRIVY_IMAGE}" image \
+            --db-repository "${TRIVY_DB_REPOSITORY}" \
+            --java-db-repository "${TRIVY_JAVA_DB_REPOSITORY}" \
             --skip-check-update \
             --severity HIGH,CRITICAL \
             --exit-code 1 \
