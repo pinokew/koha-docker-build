@@ -17,6 +17,7 @@ RUN apt-get update \
             gnupg2 \
             apt-transport-https \
             xz-utils \
+    && rm -f /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem \
     && rm -rf /var/cache/apt/archives/* \
     && rm -rf /var/lib/apt/lists/*
 
@@ -51,6 +52,7 @@ RUN apt-get update \
        idzebra-2.0 \
        apache2 \
        logrotate \
+    && rm -f /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem \
     && rm -rf /var/cache/apt/archives/* \
     && rm -rf /var/lib/apt/lists/*
 
