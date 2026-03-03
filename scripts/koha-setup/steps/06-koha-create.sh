@@ -11,6 +11,13 @@ source_koha_functions_if_present
 
 echo "Running koha-create logic..."
 
+# Preserve live config on container restarts/recreates.
+# koha-create must run only for clean bootstrap when koha-conf.xml is absent.
+if [ -s "${KOHA_CONF}" ]; then
+  echo "Existing KOHA_CONF detected (${KOHA_CONF}); skipping koha-create to keep live settings."
+  exit 0
+fi
+
 # Normalize ports.conf with runtime ports before Apache syntax checks.
 printf "Listen %s\nListen %s\n" "${KOHA_INTRANET_PORT}" "${KOHA_OPAC_PORT}" > /etc/apache2/ports.conf
 
